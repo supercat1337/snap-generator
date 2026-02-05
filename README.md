@@ -11,6 +11,42 @@ A lightweight, high-performance CLI utility for creating forensic-grade file sys
 - **Memory Efficient:** Uses Node.js streams and asynchronous generators to process large directory trees with minimal RAM footprint.
 - **Cross-Platform Ready:** Standardizes path separators (`/`) and records `time_zone` and `os_platform` for reliable auditing across Linux, macOS, and Windows.
 - **Flexible Configuration:** Supports layered configuration via JSON files, CLI arguments, and environment variables.
+- **Dual-Layer Integrity:** Supports both logical data signing and binary file checksums for tamper-proof auditing.
+
+## 🛠 Command Line Options
+
+| Flag | Long Name    | Description                                                  |
+| ---- | ------------ | ------------------------------------------------------------ |
+| `-p` | `--path`     | Directory to scan (default: current directory)               |
+| `-o` | `--out`      | Output SQLite DB path (default: snapshot-\[timestamp\].db)   |
+| `-c` | `--config`   | Path to a JSON configuration file                            |
+| `-e` | `--exclude`  | Path or Glob pattern to exclude (can be used multiple times) |
+| `-s` | `--sign`     | Logical Sign: Create .content.hash (hash of data inside DB)  |
+| `-k` | `--checksum` | Binary Checksum: Create .sha256 (hash of the DB file itself) |
+| `-q` | `--quiet`    | Disable progress output (useful for cron jobs)               |
+| `-h` | `--help`     | Show help information                                        |
+
+### 🔐 Data Integrity & Verification
+
+snap-generator provides two layers of integrity protection, which are essential for forensic auditing:
+
+### 1. Logical Data Signature (`--sign`)
+
+Generates a `.content.hash` file. This is a "fingerprint" of the actual file system data stored in the database.
+
+- **Why use it:** It remains valid even if you open the database in a viewer or move it between different versions of SQLite.
+- **Verification:** Computed by sorting all entries by path and hashing their content.
+
+### 2. Binary File Checksum (`--checksum`)
+
+Generates a standard `.sha256` file compatible with system utilities.
+
+- **Why use it:** To ensure the database file hasn't been corrupted during transfer or tampered with at the byte level.
+- **Verification:** Use the standard [sha256sum](https://linux.die.net) utility:
+
+```bash
+  sha256sum -c snapshot-12345.db.sha256
+```
 
 ## 📦 Installation
 
@@ -21,9 +57,6 @@ cd snap-generator
 
 # Install dependencies
 npm install
-
-# Build the project (if it's a TypeScript project, check for build scripts)
-# npm run build
 
 # Link for global CLI usage (optional)
 npm link
@@ -39,6 +72,9 @@ Scan a directory and save the snapshot to the default database file (`snap.db`):
 
 ```bash
 snap-gen -p ./my-data
+
+# Create a signed snapshot with a binary checksum
+snap-gen -p ./important-data -s -k
 ```
 
 ### Advanced Auditing
@@ -62,10 +98,12 @@ Example `audit-config.json`:
 
 ```json
 {
-    "path": "/usr/local/bin",
-    "out": "./snapshots/bin_audit.db",
-    "exclude": ["**/cache/**", "**/*.tmp", "**/logs/*.log", ".git/**"],
-    "quiet": true
+    "path": "/var/www/html",
+    "out": "./backups/prod_audit.db",
+    "exclude": ["**/node_modules/**", "**/*.log", "**/cache/**", "**/tmp/**", ".git/**"],
+    "sign": true,
+    "checksum": true,
+    "quiet": false
 }
 ```
 
@@ -87,6 +125,7 @@ The tool creates a portable SQLite database (`*.db` file) with two main tables:
     - `version`, `root_path`
     - `scan_start`, `scan_end` (Unix timestamps)
     - `os_platform`, `time_zone`
+    - `snapshot_hash`: The logical SHA-256 signature of the data set.
     - Statistics: `total_entries`, `total_files`, `total_dirs`, `total_links`, `total_size`, `total_errors`
 
 2.  **`entries`**: A detailed record for every entry.

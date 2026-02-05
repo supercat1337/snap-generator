@@ -12,12 +12,14 @@ import { createSnapshot } from './snapshot.js';
 async function main() {
     /** @type {import('node:util').ParseArgsConfig['options']} */
     const argOptions = {
-        config:  { type: 'string',  short: 'c' },
-        path:    { type: 'string',  short: 'p' },
-        out:     { type: 'string',  short: 'o' },
-        exclude: { type: 'string',  short: 'e', multiple: true },
-        quiet:   { type: 'boolean', short: 'q', default: false },
-        help:    { type: 'boolean', short: 'h', default: false }
+        config: { type: 'string', short: 'c' },
+        path: { type: 'string', short: 'p' },
+        out: { type: 'string', short: 'o' },
+        exclude: { type: 'string', short: 'e', multiple: true },
+        quiet: { type: 'boolean', short: 'q', default: false },
+        sign: { type: 'boolean', short: 's', default: false }, // Content hash
+        checksum: { type: 'boolean', short: 'k', default: false }, // File checksum
+        help: { type: 'boolean', short: 'h', default: false },
     };
 
     try {
@@ -34,6 +36,8 @@ Options:
   -o, --out <file>      Output SQLite DB path (overrides config)
   -e, --exclude <path>  Paths to exclude (can be multiple)
   -q, --quiet           Disable progress output
+  -s, --sign            Create .content.hash (logical hash of data)
+  -k, --checksum        Create .sha256 (binary hash of the DB file)
   -h, --help            Show this help info
 
 Environment Variables:
@@ -49,17 +53,26 @@ Environment Variables:
         // 2. Resolve final configuration (Priority: CLI > Config File > Env > Default)
         const config = {
             targetDir: resolve(
-                /** @type {string} */ (values.path || fileConfig.path || process.env.SNAP_PATH || '.')
+                /** @type {string} */ (
+                    values.path || fileConfig.path || process.env.SNAP_PATH || '.'
+                )
             ),
             dbPath: resolve(
-                /** @type {string} */ (values.out || fileConfig.out || process.env.SNAP_OUT || `./snapshot-${Date.now()}.db`)
+                /** @type {string} */ (
+                    values.out ||
+                        fileConfig.out ||
+                        process.env.SNAP_OUT ||
+                        `./snapshot-${Date.now()}.db`
+                )
             ),
             // Merge excludes from CLI and Config
             excludePaths: [
                 ...(Array.isArray(values.exclude) ? values.exclude : []),
-                ...(Array.isArray(fileConfig.exclude) ? fileConfig.exclude : [])
+                ...(Array.isArray(fileConfig.exclude) ? fileConfig.exclude : []),
             ],
-            writeToStdout: !(values.quiet || fileConfig.quiet || false)
+            writeToStdout: !(values.quiet || fileConfig.quiet || false),
+            saveHashContent: values.sign || fileConfig.sign || false, // mapped from 'sign'
+            generateDbChecksum: values.checksum || fileConfig.checksum || false, // mapped from 'checksum'
         };
 
         // 3. Execution
@@ -68,9 +81,10 @@ Environment Variables:
 
         await createSnapshot(config.targetDir, config.dbPath, {
             excludePaths: config.excludePaths,
-            writeToStdout: config.writeToStdout
+            writeToStdout: config.writeToStdout,
+            saveHashContent: config.saveHashContent,
+            generateDbChecksum: config.generateDbChecksum,
         });
-
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         console.error(`\n[FATAL ERROR] ${message}`);
@@ -83,4 +97,3 @@ main().catch(err => {
     console.error('Unhandled Rejection:', err);
     process.exit(1);
 });
-
