@@ -5,6 +5,7 @@ import { initDb, calculateSnapshotHash } from './database.js';
 import { walk, compileExclusions } from './walker.js';
 import { getEntryData } from './metadata.js';
 import { calculateFileHash } from './hash.js';
+import { UserGroupInfo } from './user-group-info.js';
 
 /**
  * Creates a forensic file system snapshot in a SQLite database.
@@ -30,6 +31,30 @@ export async function createSnapshot(
 ) {
     const absTargetDir = resolve(targetDir);
     const db = initDb(dbPath);
+
+    const ugInfo = new UserGroupInfo();
+
+    // 1. Persist User and Group metadata immediately
+    const insertUser = db.prepare(`
+        INSERT OR REPLACE INTO users (uid, username, gid, gecos, homedir, shell)
+        VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+    const insertGroup = db.prepare(`
+        INSERT OR REPLACE INTO groups (gid, groupname, members)
+        VALUES (?, ?, ?)
+    `);
+
+    const persistAuth = db.transaction(() => {
+        for (const user of ugInfo.usersCache.values()) {
+            insertUser.run(user.uid, user.username, user.gid, user.gecos, user.homedir, user.shell);
+        }
+        for (const group of ugInfo.groupsCache.values()) {
+            insertGroup.run(group.gid, group.groupname, group.members.join(','));
+        }
+    });
+
+    persistAuth();
 
     // Pre-compile Globstar patterns for O(n) performance
     const excludeMatchers = compileExclusions(excludePaths);

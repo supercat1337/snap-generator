@@ -3,15 +3,15 @@ import Database from 'better-sqlite3';
 
 /**
  * Initializes the SQLite database with required tables and pragmas.
- * @param {string} dbPath 
- * @returns 
+ * @param {string} dbPath
+ * @returns
  */
 export function initDb(dbPath) {
-  const db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('synchronous = OFF');
+    const db = new Database(dbPath);
+    db.pragma('journal_mode = WAL');
+    db.pragma('synchronous = OFF');
 
-  db.exec(`
+    db.exec(`
 CREATE TABLE IF NOT EXISTS snapshot_info (
     version TEXT,
     root_path TEXT,
@@ -45,7 +45,24 @@ CREATE TABLE entries (
 ) WITHOUT ROWID; -- Optimization: stores data directly in the index
   `);
 
-  return db;
+    db.exec(`
+CREATE TABLE IF NOT EXISTS users (
+    uid INTEGER PRIMARY KEY,
+    username TEXT,
+    gid INTEGER,
+    gecos TEXT,
+    homedir TEXT,
+    shell TEXT
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS groups (
+    gid INTEGER PRIMARY KEY,
+    groupname TEXT,
+    members TEXT -- Store as comma-separated string or JSON
+) WITHOUT ROWID;
+`);
+
+    return db;
 }
 
 import { createHash } from 'node:crypto';
@@ -53,8 +70,8 @@ import { createHash } from 'node:crypto';
 /**
  * Calculates a deterministic hash of the entire snapshot.
  * Uses .iterate() to handle large datasets without high RAM usage.
- * 
- * @param {import('better-sqlite3').Database} db 
+ *
+ * @param {import('better-sqlite3').Database} db
  * @returns {string} The final SHA256 hex hash.
  */
 export function calculateSnapshotHash(db) {
