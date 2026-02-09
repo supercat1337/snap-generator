@@ -75,7 +75,7 @@ Environment Variables:
             writeToStdout: !(values.quiet || fileConfig.quiet || false),
             generateSignFile: values.sign || fileConfig.sign || false, // mapped from 'sign'
             generateChecksum: values.checksum || fileConfig.checksum || false, // mapped from 'checksum'
-            name: values.name || fileConfig.name || false,
+            name: values.name || fileConfig.name || "",
         };
 
         // 3. Execution
