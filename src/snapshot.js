@@ -162,6 +162,8 @@ export async function createSnapshot(
 
         scanDuration = scanEnd - scanStart;
 
+        sign = calculateSnapshotContentHash(db);
+
         // Persist Snapshot Metadata
         db.prepare(
             `
@@ -189,7 +191,7 @@ export async function createSnapshot(
             JSON.stringify(excludePaths)
         );
 
-        sign = calculateSnapshotContentHash(db);
+
     } catch (err) {
         isSuccess = false;
         const message = err instanceof Error ? err.message : String(err);
