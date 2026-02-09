@@ -17,7 +17,7 @@ import { UserGroupInfo } from './user-group-info.js';
  * @param {boolean} [options.writeToStdout] - Whether to print progress and errors to the console.
  * @param {boolean} [options.generateSignFile] - Logical Sign: Create .sig file (hash of data inside DB)
  * @param {boolean} [options.generateChecksum] - Binary Checksum: Create .sha256 file (hash of the DB file itself).
- * @param {string} [options.snapshot_name] - Name of the snapshot
+ * @param {string} [options.snapshotName] - Name of the snapshot
  * @returns {Promise<void>}
  */
 export async function createSnapshot(
@@ -28,7 +28,7 @@ export async function createSnapshot(
         writeToStdout = true,
         generateSignFile = false,
         generateChecksum = false,
-        snapshot_name = 'snapshot',
+        snapshotName = 'snapshot',
     } = {}
 ) {
     const absTargetDir = resolve(targetDir).replace(/\\+/g, '/');
@@ -176,7 +176,7 @@ export async function createSnapshot(
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `
         ).run(
-            snapshot_name,
+            snapshotName,
             '1.0.0',
             absTargetDir,
             scanStart,

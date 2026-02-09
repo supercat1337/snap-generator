@@ -88,7 +88,7 @@ Environment Variables:
             writeToStdout: config.writeToStdout,
             generateSignFile: config.generateSignFile,
             generateChecksum: config.generateChecksum,
-            snapshot_name: config.name,
+            snapshotName: config.name,
         });
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
