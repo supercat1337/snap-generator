@@ -32,6 +32,7 @@ Usage: snap-gen [options]
 
 Options:
   -c, --config <file>   Path to JSON configuration file
+  -n, --name <name>     Name of the snapshot
   -p, --path <dir>      Directory to scan (overrides config)
   -o, --out <file>      Output SQLite DB path (overrides config)
   -e, --exclude <path>  Paths to exclude (can be multiple)
@@ -73,10 +74,11 @@ Environment Variables:
             writeToStdout: !(values.quiet || fileConfig.quiet || false),
             generateSignFile: values.sign || fileConfig.sign || false, // mapped from 'sign'
             generateChecksum: values.checksum || fileConfig.checksum || false, // mapped from 'checksum'
+            name: values.name || fileConfig.name || 'Snapshot',
         };
 
         // 3. Execution
-        
+
         if (config.writeToStdout) {
             console.log(`[*] Initializing Snapshot...`);
         }
@@ -86,6 +88,7 @@ Environment Variables:
             writeToStdout: config.writeToStdout,
             generateSignFile: config.generateSignFile,
             generateChecksum: config.generateChecksum,
+            snapshot_name: config.name,
         });
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

@@ -17,6 +17,7 @@ import { UserGroupInfo } from './user-group-info.js';
  * @param {boolean} [options.writeToStdout] - Whether to print progress and errors to the console.
  * @param {boolean} [options.generateSignFile] - Logical Sign: Create .sig file (hash of data inside DB)
  * @param {boolean} [options.generateChecksum] - Binary Checksum: Create .sha256 file (hash of the DB file itself).
+ * @param {string} [options.snapshot_name] - Name of the snapshot
  * @returns {Promise<void>}
  */
 export async function createSnapshot(
@@ -27,6 +28,7 @@ export async function createSnapshot(
         writeToStdout = true,
         generateSignFile = false,
         generateChecksum = false,
+        snapshot_name = 'snapshot',
     } = {}
 ) {
     const absTargetDir = resolve(targetDir).replace(/\\+/g, '/');
@@ -168,12 +170,13 @@ export async function createSnapshot(
         db.prepare(
             `
             INSERT INTO snapshot_info (
-                version, root_path, scan_start, scan_end, scan_duration,
+                snapshot_name, version, root_path, scan_start, scan_end, scan_duration,
                 total_entries, total_files, total_dirs, total_links, total_size, total_errors,
                 os_platform, time_zone, snapshot_hash, exclude_paths
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `
         ).run(
+            snapshot_name,
             '1.0.0',
             absTargetDir,
             scanStart,
@@ -188,7 +191,7 @@ export async function createSnapshot(
             process.platform,
             tz,
             sign,
-            JSON.stringify(excludePaths)
+            JSON.stringify(excludePaths),
         );
 
 

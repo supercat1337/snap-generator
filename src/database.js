@@ -13,6 +13,7 @@ export function initDb(dbPath) {
 
     db.exec(`
 CREATE TABLE IF NOT EXISTS snapshot_info (
+    snapshot_name TEXT,
     version TEXT,
     root_path TEXT,
     scan_start INTEGER,
