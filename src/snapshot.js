@@ -15,8 +15,8 @@ import { UserGroupInfo } from './user-group-info.js';
  * @param {Object} [options] - Configuration options.
  * @param {string[]} [options.excludePaths] - Paths to exclude from the scan.
  * @param {boolean} [options.writeToStdout] - Whether to print progress and errors to the console.
- * @param {boolean} [options.saveHashContent] - Whether to save the snapshot hash to a .sha256 file.
- * @param {boolean} [options.generateDbChecksum] - Whether to calculate and store a checksum of the database file itself (not recommended for large datasets).
+ * @param {boolean} [options.generateSignFile] - Logical Sign: Create .sig file (hash of data inside DB)
+ * @param {boolean} [options.generateChecksum] - Binary Checksum: Create .sha256 file (hash of the DB file itself).
  * @returns {Promise<void>}
  */
 export async function createSnapshot(
@@ -25,11 +25,11 @@ export async function createSnapshot(
     {
         excludePaths = [],
         writeToStdout = true,
-        saveHashContent = false,
-        generateDbChecksum = false,
+        generateSignFile = false,
+        generateChecksum = false,
     } = {}
 ) {
-    const absTargetDir = resolve(targetDir);
+    const absTargetDir = resolve(targetDir).replace(/\\+/g, '/');
     const db = initDb(dbPath);
 
     const ugInfo = new UserGroupInfo(writeToStdout);
@@ -58,8 +58,14 @@ export async function createSnapshot(
     });
 
     let buffer = [];
+    /** @type {string|null} */
+    let sign = null;
+
+    /** @type {number} */
+    let scanDuration = 0;
+
     try {
-        for await (const filePath of walk(absTargetDir, absTargetDir, excludeMatchers)) {
+        for await (let filePath of walk(absTargetDir, absTargetDir, excludeMatchers)) {
             try {
                 // Skip the root directory itself
                 if (resolve(filePath) === absTargetDir) continue;
@@ -67,9 +73,10 @@ export async function createSnapshot(
                 const data = await getEntryData(filePath, absTargetDir, calculateFileHash);
 
                 if (data) {
+                    if (data.path === '..' || data.path === '.') continue;
+
                     foundUids.add(data.uid);
                     foundGids.add(data.gid);
-
                     count++;
                     // Update live statistics
                     if (data.type === 'file') {
@@ -109,7 +116,7 @@ export async function createSnapshot(
         // Finalize remaining entries
         if (buffer.length > 0) transaction(buffer);
 
-        const finalSnapshotHash = calculateSnapshotContentHash(db);
+        sign = calculateSnapshotContentHash(db);
 
         const insertUser = db.prepare(`
         INSERT INTO users (uid, username, gid, gecos, homedir, shell)
@@ -155,7 +162,7 @@ export async function createSnapshot(
         const scanEnd = Date.now();
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-        const scanDuration = scanEnd - scanStart;
+        scanDuration = scanEnd - scanStart;
 
         // Persist Snapshot Metadata
         db.prepare(
@@ -180,37 +187,9 @@ export async function createSnapshot(
             errorCount,
             process.platform,
             tz,
-            finalSnapshotHash,
+            sign,
             JSON.stringify(excludePaths)
         );
-
-        if (saveHashContent) {
-            const hashFilePath = `${dbPath}.content.hash`;
-            const content = [
-                `# Forensic Content Hash (SHA256)`,
-                `# This hash represents the data inside the database, not the file itself.`,
-                `# Calculated over 'entries' table sorted by path.`,
-                `${finalSnapshotHash}`,
-            ].join('\n');
-
-            writeFileSync(hashFilePath, content);
-        }
-
-        if (writeToStdout) {
-            process.stdout.write(
-                `\r✅ Snapshot finished.                                                \n`
-            );
-            console.log(`- Snapshot saved to: ${dbPath.replace(/\\/g, '/')}`);
-            console.log(`- Snapshot Content Hash (SHA256): ${finalSnapshotHash}`);
-            console.log(`- Duration:  ${((scanDuration) / 1000).toFixed(2)}s`);
-            console.log(
-                `- Entries:   ${count} (Files: ${stats.files}, Dirs: ${stats.dirs}, Links: ${stats.links})`
-            );
-            console.log(`- Data Size: ${(stats.totalSize / 1024 / 1024).toFixed(2)} MB`);
-            if (errorCount > 0) {
-                console.log(`- Errors:    ${errorCount} (Check logs above)`);
-            }
-        }
     } catch (err) {
         isSuccess = false;
         const message = err instanceof Error ? err.message : String(err);
@@ -220,7 +199,55 @@ export async function createSnapshot(
         db.close();
     }
 
-    if (isSuccess && generateDbChecksum) {
+    if (!isSuccess) {
+        return;
+    }
+
+    if (writeToStdout) {
+        process.stdout.write(
+            `\r✅ Snapshot finished.                                                \n`
+        );
+        console.log(`- Snapshot saved to: ${dbPath.replace(/\\/g, '/')}`);
+        console.log(`- Duration:  ${(scanDuration / 1000).toFixed(2)}s`);
+        console.log(
+            `- Entries:   ${count} (Files: ${stats.files}, Dirs: ${stats.dirs}, Links: ${stats.links})`
+        );
+        console.log(`- Data Size: ${(stats.totalSize / 1024 / 1024).toFixed(2)} MB`);
+        if (errorCount > 0) {
+            console.log(`- Errors:    ${errorCount} (Check logs above)`);
+        }
+    }
+
+    if (generateSignFile) {
+        if (writeToStdout) {
+            process.stdout.write(`[*] Generating snapshot signature... `);
+        }
+
+        try {
+            const hashFilePath = `${dbPath}.sig`;
+            const content = [
+                `# Forensic Content Hash (SHA256)`,
+                `# This hash represents the data inside the database, not the file itself.`,
+                `# Calculated over 'entries' table sorted by path.`,
+                `${sign}`,
+            ].join('\n');
+
+            writeFileSync(hashFilePath, content);
+
+            if (writeToStdout) {
+                process.stdout.write(`Done.\n`);
+                console.log(`- Signature: ${sign}`);
+                console.log(`- Signature file created: ${hashFilePath.replace(/\\/g, '/')}`);
+            }
+        } catch (e) {
+            if (writeToStdout) {
+                const msg = e instanceof Error ? e.message : String(e);
+                console.error(`[Warning] Failed to generate DB signature: ${msg}`);
+            }
+        }
+    }
+
+    if (generateChecksum) {
         if (writeToStdout) {
             process.stdout.write(`[*] Generating database file checksum... `);
         }
@@ -234,7 +261,7 @@ export async function createSnapshot(
             if (writeToStdout) {
                 process.stdout.write(`Done.\n`);
                 console.log(`- File Checksum: ${fileHash}`);
-                console.log(`- Checksum file created: ${checksumPath}`);
+                console.log(`- Checksum file created: ${checksumPath.replace(/\\/g, '/')}`);
             }
         } catch (err) {
             if (writeToStdout) {
@@ -255,6 +282,8 @@ const toIgnore = [
     '/var/log/temp'
 ];
 
-await createSnapshot('./my-project', 'snap.db', toIgnore);
+await createSnapshot('./my-project', 'snap.db', {
+    excludePaths: toIgnore
+});
 
 */

@@ -21,7 +21,7 @@ A lightweight, high-performance CLI utility for creating forensic-grade file sys
 | `-o` | `--out`      | Output SQLite DB path (default: snapshot-\[timestamp\].db)   |
 | `-c` | `--config`   | Path to a JSON configuration file                            |
 | `-e` | `--exclude`  | Path or Glob pattern to exclude (can be used multiple times) |
-| `-s` | `--sign`     | Logical Sign: Create .content.hash (hash of data inside DB)  |
+| `-s` | `--sign`     | Logical Sign: Create .sig (hash of data inside DB)  |
 | `-k` | `--checksum` | Binary Checksum: Create .sha256 (hash of the DB file itself) |
 | `-q` | `--quiet`    | Disable progress output (useful for cron jobs)               |
 | `-h` | `--help`     | Show help information                                        |
@@ -32,7 +32,7 @@ snap-generator provides two layers of integrity protection, which are essential 
 
 ### 1. Logical Data Signature (`--sign`)
 
-Generates a `.content.hash` file. This is a "fingerprint" of the actual file system data stored in the database.
+Generates a `.sig` file. This is a "fingerprint" of the actual file system data stored in the database.
 
 - **Why use it:** It remains valid even if you open the database in a viewer or move it between different versions of SQLite.
 - **Verification:** Computed by sorting all entries by path and hashing their content.
@@ -133,6 +133,7 @@ The tool creates a portable SQLite database (`*.db` file) with tables:
     - `path` (PRIMARY KEY, standardized to `/`)
     - `type` (`file`, `dir`, `link`)
     - `size`, `hash` (SHA-256 for files), `target` (for symlinks)
+    - `gid`, `uid`
     - Metadata: `mode`, `uid`, `gid`, `ino`, `nlink`
     - Timestamps: `mtime`, `ctime`, `btime`
 
@@ -144,7 +145,7 @@ The tool creates a portable SQLite database (`*.db` file) with tables:
     - `gecos`: Full name/system info.
     - `homedir`: Path to the user's home directory.
     - `shell`: The default login shell.
-    
+
 4.  **`groups`**
     Captures local system groups from `/etc/group` at the time of the scan.
     - `gid`: Primary Key (Group ID).

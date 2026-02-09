@@ -36,7 +36,7 @@ Options:
   -o, --out <file>      Output SQLite DB path (overrides config)
   -e, --exclude <path>  Paths to exclude (can be multiple)
   -q, --quiet           Disable progress output
-  -s, --sign            Create .content.hash (logical hash of data)
+  -s, --sign            Create .sig (logical hash of data)
   -k, --checksum        Create .sha256 (binary hash of the DB file)
   -h, --help            Show this help info
 
@@ -71,19 +71,21 @@ Environment Variables:
                 ...(Array.isArray(fileConfig.exclude) ? fileConfig.exclude : []),
             ],
             writeToStdout: !(values.quiet || fileConfig.quiet || false),
-            saveHashContent: values.sign || fileConfig.sign || false, // mapped from 'sign'
-            generateDbChecksum: values.checksum || fileConfig.checksum || false, // mapped from 'checksum'
+            generateSignFile: values.sign || fileConfig.sign || false, // mapped from 'sign'
+            generateChecksum: values.checksum || fileConfig.checksum || false, // mapped from 'checksum'
         };
 
         // 3. Execution
-        console.log(`[*] Initializing Snapshot...`);
-        if (!config.writeToStdout) console.log(`[*] Quiet mode enabled.`);
+        
+        if (config.writeToStdout) {
+            console.log(`[*] Initializing Snapshot...`);
+        }
 
         await createSnapshot(config.targetDir, config.dbPath, {
             excludePaths: config.excludePaths,
             writeToStdout: config.writeToStdout,
-            saveHashContent: config.saveHashContent,
-            generateDbChecksum: config.generateDbChecksum,
+            generateSignFile: config.generateSignFile,
+            generateChecksum: config.generateChecksum,
         });
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
