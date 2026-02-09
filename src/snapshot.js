@@ -28,7 +28,7 @@ export async function createSnapshot(
         writeToStdout = true,
         generateSignFile = false,
         generateChecksum = false,
-        snapshotName = 'snapshot',
+        snapshotName = '',
     } = {}
 ) {
     const absTargetDir = resolve(targetDir).replace(/\\+/g, '/');
