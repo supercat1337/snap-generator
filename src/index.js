@@ -12,6 +12,7 @@ import { createSnapshot } from './snapshot.js';
 async function main() {
     /** @type {import('node:util').ParseArgsConfig['options']} */
     const argOptions = {
+        name: { type: 'string', short: 'n' },
         config: { type: 'string', short: 'c' },
         path: { type: 'string', short: 'p' },
         out: { type: 'string', short: 'o' },
@@ -74,7 +75,7 @@ Environment Variables:
             writeToStdout: !(values.quiet || fileConfig.quiet || false),
             generateSignFile: values.sign || fileConfig.sign || false, // mapped from 'sign'
             generateChecksum: values.checksum || fileConfig.checksum || false, // mapped from 'checksum'
-            name: values.name || fileConfig.name || 'Snapshot',
+            name: values.name || fileConfig.name || false,
         };
 
         // 3. Execution
