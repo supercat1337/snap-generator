@@ -1,7 +1,7 @@
 //@ts-check
 import { writeFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
-import { initDb, calculateSnapshotHash } from './database.js';
+import { initDb, calculateSnapshotContentHash } from './database.js';
 import { walk, compileExclusions } from './walker.js';
 import { getEntryData } from './metadata.js';
 import { calculateFileHash } from './hash.js';
@@ -32,29 +32,9 @@ export async function createSnapshot(
     const absTargetDir = resolve(targetDir);
     const db = initDb(dbPath);
 
-    const ugInfo = new UserGroupInfo();
-
-    // 1. Persist User and Group metadata immediately
-    const insertUser = db.prepare(`
-        INSERT OR REPLACE INTO users (uid, username, gid, gecos, homedir, shell)
-        VALUES (?, ?, ?, ?, ?, ?)
-    `);
-
-    const insertGroup = db.prepare(`
-        INSERT OR REPLACE INTO groups (gid, groupname, members)
-        VALUES (?, ?, ?)
-    `);
-
-    const persistAuth = db.transaction(() => {
-        for (const user of ugInfo.usersCache.values()) {
-            insertUser.run(user.uid, user.username, user.gid, user.gecos, user.homedir, user.shell);
-        }
-        for (const group of ugInfo.groupsCache.values()) {
-            insertGroup.run(group.gid, group.groupname, group.members.join(','));
-        }
-    });
-
-    persistAuth();
+    const ugInfo = new UserGroupInfo(writeToStdout);
+    const foundUids = new Set();
+    const foundGids = new Set();
 
     // Pre-compile Globstar patterns for O(n) performance
     const excludeMatchers = compileExclusions(excludePaths);
@@ -87,6 +67,9 @@ export async function createSnapshot(
                 const data = await getEntryData(filePath, absTargetDir, calculateFileHash);
 
                 if (data) {
+                    foundUids.add(data.uid);
+                    foundGids.add(data.gid);
+
                     count++;
                     // Update live statistics
                     if (data.type === 'file') {
@@ -126,25 +109,69 @@ export async function createSnapshot(
         // Finalize remaining entries
         if (buffer.length > 0) transaction(buffer);
 
-        const finalSnapshotHash = calculateSnapshotHash(db);
+        const finalSnapshotHash = calculateSnapshotContentHash(db);
+
+        const insertUser = db.prepare(`
+        INSERT INTO users (uid, username, gid, gecos, homedir, shell)
+        VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+        const insertGroup = db.prepare(`
+        INSERT INTO groups (gid, groupname, members)
+        VALUES (?, ?, ?)
+    `);
+
+        db.transaction(() => {
+            // Store all found users and groups
+            for (const uid of foundUids) {
+                const user = ugInfo.getUserByUid(uid);
+                if (user) {
+                    insertUser.run(
+                        user.uid,
+                        user.username,
+                        user.gid,
+                        user.gecos,
+                        user.homedir,
+                        user.shell
+                    );
+                } else {
+                    // If UID not found in /etc/passwd
+                    insertUser.run(uid, `unknown_u${uid}`, null, 'Unknown user', null, null);
+                }
+            }
+
+            // Store all found groups
+            for (const gid of foundGids) {
+                const group = ugInfo.getGroupByGid(gid);
+                if (group) {
+                    insertGroup.run(group.gid, group.groupname, group.members.join(','));
+                } else {
+                    // If GID not found in /etc/group
+                    insertGroup.run(gid, `unknown_g${gid}`, null);
+                }
+            }
+        })();
 
         const scanEnd = Date.now();
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+        const scanDuration = scanEnd - scanStart;
 
         // Persist Snapshot Metadata
         db.prepare(
             `
             INSERT INTO snapshot_info (
-                version, root_path, scan_start, scan_end, 
+                version, root_path, scan_start, scan_end, scan_duration,
                 total_entries, total_files, total_dirs, total_links, total_size, total_errors,
-                os_platform, time_zone, snapshot_hash
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                os_platform, time_zone, snapshot_hash, exclude_paths
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `
         ).run(
             '1.0.0',
             absTargetDir,
             scanStart,
             scanEnd,
+            scanDuration,
             count,
             stats.files,
             stats.dirs,
@@ -153,7 +180,8 @@ export async function createSnapshot(
             errorCount,
             process.platform,
             tz,
-            finalSnapshotHash
+            finalSnapshotHash,
+            JSON.stringify(excludePaths)
         );
 
         if (saveHashContent) {
@@ -174,7 +202,7 @@ export async function createSnapshot(
             );
             console.log(`- Snapshot saved to: ${dbPath.replace(/\\/g, '/')}`);
             console.log(`- Snapshot Content Hash (SHA256): ${finalSnapshotHash}`);
-            console.log(`- Duration:  ${((scanEnd - scanStart) / 1000).toFixed(2)}s`);
+            console.log(`- Duration:  ${((scanDuration) / 1000).toFixed(2)}s`);
             console.log(
                 `- Entries:   ${count} (Files: ${stats.files}, Dirs: ${stats.dirs}, Links: ${stats.links})`
             );

@@ -19,7 +19,8 @@ import fs from 'node:fs';
  */
 
 export class UserGroupInfo {
-    constructor() {
+    constructor(writeToStdout = true) {
+        this.writeToStdout = writeToStdout;
         /** @type {Map<number, UserInfo>} */
         this.usersCache = new Map();
 
@@ -45,7 +46,7 @@ export class UserGroupInfo {
                 });
             });
         } catch (error) {
-            console.warn('Cannot load /etc/passwd');
+            if (this.writeToStdout) console.warn('Cannot load /etc/passwd');
         }
 
         // Load all groups
@@ -61,7 +62,7 @@ export class UserGroupInfo {
                 });
             });
         } catch (error) {
-            console.warn('Cannot load /etc/group');
+            if (this.writeToStdout) console.warn('Cannot load /etc/group');
         }
     }
 

@@ -119,13 +119,14 @@ snap-gen  # Will use the environment variables above
 
 ## 📂 Snapshot Database Schema
 
-The tool creates a portable SQLite database (`*.db` file) with two main tables:
+The tool creates a portable SQLite database (`*.db` file) with tables:
 
 1.  **`snapshot_info`**: Metadata about the scan operation.
     - `version`, `root_path`
     - `scan_start`, `scan_end` (Unix timestamps)
     - `os_platform`, `time_zone`
     - `snapshot_hash`: The logical SHA-256 signature of the data set.
+    - `exclude_paths`
     - Statistics: `total_entries`, `total_files`, `total_dirs`, `total_links`, `total_size`, `total_errors`
 
 2.  **`entries`**: A detailed record for every entry.
@@ -134,6 +135,21 @@ The tool creates a portable SQLite database (`*.db` file) with two main tables:
     - `size`, `hash` (SHA-256 for files), `target` (for symlinks)
     - Metadata: `mode`, `uid`, `gid`, `ino`, `nlink`
     - Timestamps: `mtime`, `ctime`, `btime`
+
+3.  **`users`**
+    Captures local system user accounts from `/etc/passwd` at the time of the scan.
+    - `uid`: Primary Key (User ID).
+    - `username`: Name associated with the UID.
+    - `gid`: Primary Group ID.
+    - `gecos`: Full name/system info.
+    - `homedir`: Path to the user's home directory.
+    - `shell`: The default login shell.
+    
+4.  **`groups`**
+    Captures local system groups from `/etc/group` at the time of the scan.
+    - `gid`: Primary Key (Group ID).
+    - `groupname`: Name associated with the GID.
+    - `members`: Comma-separated list of usernames belonging to the group.
 
 ## ⚙️ Configuration Hierarchy
 

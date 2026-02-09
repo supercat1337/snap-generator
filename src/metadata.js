@@ -8,7 +8,7 @@ import { relative } from 'node:path';
  * @param {string} filePath - The path to the file system entry.
  * @param {string} rootPath - The root path of the file system.
  * @param {(filePath: string)=>Promise<string|null>} calculateFileHash - A function to compute the hash of a file.
- * @returns {Promise<{type: string, path: string, size: number|null, mtime: number, ctime: number, btime: number, mode: number, ino: number, hash: string|null, target: string|null}|null>} - Metadata object or null for unsupported types.
+ * @returns {Promise<{type: string, path: string, size: number|null, mtime: number, ctime: number, btime: number, mode: number, uid: number, gid: number, ino: number, nlink: number, hash: string|null, target: string|null}|null>} - Metadata object or null for unsupported types.
  */
 export async function getEntryData(filePath, rootPath, calculateFileHash) {
     const stats = await lstat(filePath);
