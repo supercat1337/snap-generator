@@ -116,8 +116,6 @@ export async function createSnapshot(
         // Finalize remaining entries
         if (buffer.length > 0) transaction(buffer);
 
-        sign = calculateSnapshotContentHash(db);
-
         const insertUser = db.prepare(`
         INSERT INTO users (uid, username, gid, gecos, homedir, shell)
         VALUES (?, ?, ?, ?, ?, ?)
@@ -190,6 +188,8 @@ export async function createSnapshot(
             sign,
             JSON.stringify(excludePaths)
         );
+
+        sign = calculateSnapshotContentHash(db);
     } catch (err) {
         isSuccess = false;
         const message = err instanceof Error ? err.message : String(err);
